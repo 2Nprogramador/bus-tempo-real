@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.express as px
 import numpy as np
-import time  # Importar a biblioteca time para a função sleep
+import time
 
 # --- NOVO: Bibliotecas para Geocodificação ---
 from geopy.geocoders import Nominatim
@@ -296,3 +296,4 @@ if auto_refresh:
 
     # Após a contagem regressiva, força a re-execução do script
     st.rerun()
+
