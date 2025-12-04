@@ -128,10 +128,21 @@ if usar_localizacao:
     if not localizacao_sucesso and usar_localizacao:
         st.sidebar.warning("Usando coordenadas padrão de fallback para exibição no mapa.")
 
-# --- CONTROLE DE ATUALIZAÇÃO AUTOMÁTICA ---
+# --- CONTROLE DE ATUALIZAÇÃO AUTOMÁTICA E ESTILO DO MAPA ---
 st.sidebar.markdown("---")
 st.sidebar.write("⚙️ **Controle de Atualização**")
 auto_refresh = st.sidebar.checkbox("Atualização Automática a cada 25s", value=True) # Padrão como True
+
+# --- NOVO: SELEÇÃO DE ESTILO DO MAPA ---
+st.sidebar.markdown("---")
+st.sidebar.write("🗺️ **Estilo do Mapa**")
+map_style = st.sidebar.selectbox(
+    "Escolha o estilo do mapa (para melhor visualização das ruas):",
+    options=["open-street-map", "stamen-terrain", "stamen-toner", "carto-positron", "carto-darkmatter"],
+    index=0, # open-street-map como padrão
+    format_func=lambda x: x.replace('-', ' ').title() # Formata o nome para ficar mais legível
+)
+# ----------------------------------------
 
 # Botão de atualização manual (agora ele só força o rerun)
 if st.sidebar.button("🔄 Atualizar Dados Agora"):
@@ -240,7 +251,8 @@ if data:
                 zoom=zoom_start,
                 height=600,
                 center={"lat": center_lat, "lon": center_lon},
-                mapbox_style="open-street-map",
+                # -- USO DA VARIÁVEL DE ESTILO DO MAPA AQUI --
+                mapbox_style=map_style,
                 title=f"Posição atual dos ônibus da linha {linha_desejada}"
             )
 
