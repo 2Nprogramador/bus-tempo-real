@@ -24,8 +24,7 @@ if 'geo_result' not in st.session_state:
 if 'location_source' not in st.session_state:
     st.session_state.location_source = 'Localização Automática (Browser)'
 
-# --- CHAVE DE COMPONENTE (NOVO: Ajuda a estabilizar a chamada JS) ---
-# Usamos uma chave única para garantir que o Streamlit saiba quando recriar ou reusar o componente.
+# --- CHAVE DE COMPONENTE (MANTIDA como referência, mas removida da chamada html) ---
 GEO_KEY = "browser_geolocation_component"
 
 
@@ -88,8 +87,8 @@ def get_browser_location():
     
     # Renderiza o componente HTML/JS. Ele é invisível (height=0).
     # O valor retornado será o último JSON enviado pelo JS.
-    # CORREÇÃO: Removendo o argumento 'default' que estava causando o TypeError.
-    result = html(js_code, height=0, width=0, scrolling=False, key=GEO_KEY)
+    # CORREÇÃO: Removendo o argumento 'key' para evitar o TypeError.
+    result = html(js_code, height=0, width=0, scrolling=False) 
     return result
 
 # --- FUNÇÕES AUXILIARES ---
@@ -171,11 +170,10 @@ if usar_localizacao:
         geo_result = get_browser_location()
         
         # Atualiza o session_state com o resultado
-        # Se geo_result for um dicionário e não for None (padrão de retorno sem 'default' se não houve postagem), atualizamos.
         if isinstance(geo_result, dict) and geo_result.get('status') != 'pending':
             st.session_state.geo_result = geo_result
         elif geo_result is None:
-             # Se geo_result for None, garantimos que o estado não seja sobrescrito.
+             # Se geo_result for None, o Streamlit ainda está esperando a resposta do JS. Mantemos o estado.
              pass 
 
         # Lógica para consumir o resultado armazenado
