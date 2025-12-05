@@ -124,7 +124,7 @@ def get_data(url):
 def geocode_address(address):
     """Converte um endereço em coordenadas geográficas usando Nominatim."""
     try:
-        geolocator = Nominatim(user_agent="streamlit_rj_bus_tracker_app")
+        geolocator = Nominatim(user_agent="streamlit_rj_bus_tracker_app_1")
         return geolocator.geocode(address)
     except GeocoderTimedOut:
         return "TIMEOUT"
@@ -413,3 +413,4 @@ if auto_refresh:
         time.sleep(1) 
 
     st.rerun()
+
