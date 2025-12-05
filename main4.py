@@ -88,8 +88,8 @@ def get_browser_location():
     
     # Renderiza o componente HTML/JS. Ele é invisível (height=0).
     # O valor retornado será o último JSON enviado pelo JS.
-    # Adicionando a chave (key) para estabilizar o componente
-    result = html(js_code, height=0, width=0, scrolling=False, default=st.session_state.geo_result, key=GEO_KEY)
+    # CORREÇÃO: Removendo o argumento 'default' que estava causando o TypeError.
+    result = html(js_code, height=0, width=0, scrolling=False, key=GEO_KEY)
     return result
 
 # --- FUNÇÕES AUXILIARES ---
@@ -168,14 +168,15 @@ if usar_localizacao:
     if location_source == 'Localização Automática (Browser)':
         
         # CHAMA O COMPONENTE HTML/JS AQUI. 
-        # Esta chamada precisa ser feita em cada re-execução para que o Streamlit 
-        # possa capturar a resposta do JavaScript.
         geo_result = get_browser_location()
         
         # Atualiza o session_state com o resultado
-        # Se geo_result for um dicionário e não for o valor 'default' inicializado, atualizamos.
+        # Se geo_result for um dicionário e não for None (padrão de retorno sem 'default' se não houve postagem), atualizamos.
         if isinstance(geo_result, dict) and geo_result.get('status') != 'pending':
             st.session_state.geo_result = geo_result
+        elif geo_result is None:
+             # Se geo_result for None, garantimos que o estado não seja sobrescrito.
+             pass 
 
         # Lógica para consumir o resultado armazenado
         if st.session_state.geo_result['status'] == 'success':
