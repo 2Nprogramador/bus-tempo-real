@@ -24,6 +24,11 @@ if 'geo_result' not in st.session_state:
 if 'location_source' not in st.session_state:
     st.session_state.location_source = 'Localização Automática (Browser)'
 
+# --- CHAVE DE COMPONENTE (NOVO: Ajuda a estabilizar a chamada JS) ---
+# Usamos uma chave única para garantir que o Streamlit saiba quando recriar ou reusar o componente.
+GEO_KEY = "browser_geolocation_component"
+
+
 # --- COMPONENTE DE GEOLOCALIZAÇÃO (NOVO) ---
 def get_browser_location():
     """
@@ -83,7 +88,8 @@ def get_browser_location():
     
     # Renderiza o componente HTML/JS. Ele é invisível (height=0).
     # O valor retornado será o último JSON enviado pelo JS.
-    result = html(js_code, height=0, width=0, scrolling=False, default={'status': 'pending'})
+    # Adicionando a chave (key) para estabilizar o componente
+    result = html(js_code, height=0, width=0, scrolling=False, default=st.session_state.geo_result, key=GEO_KEY)
     return result
 
 # --- FUNÇÕES AUXILIARES ---
@@ -161,13 +167,14 @@ if usar_localizacao:
     # -----------------------------------------------------------
     if location_source == 'Localização Automática (Browser)':
         
-        # Chama a função que injeta o JS e pega o resultado
-        # O resultado do componente é sempre o último valor enviado pelo JS
+        # CHAMA O COMPONENTE HTML/JS AQUI. 
+        # Esta chamada precisa ser feita em cada re-execução para que o Streamlit 
+        # possa capturar a resposta do JavaScript.
         geo_result = get_browser_location()
         
-        # Atualiza o session_state com o resultado, exceto se ainda for 'pending'
-        if geo_result and geo_result.get('status') != 'pending':
-            # Isso garante que a latitude/longitude sejam salvas
+        # Atualiza o session_state com o resultado
+        # Se geo_result for um dicionário e não for o valor 'default' inicializado, atualizamos.
+        if isinstance(geo_result, dict) and geo_result.get('status') != 'pending':
             st.session_state.geo_result = geo_result
 
         # Lógica para consumir o resultado armazenado
@@ -230,6 +237,8 @@ if usar_localizacao:
 
     # Se a localização falhou (em qualquer método), volta para o padrão de Botafogo
     if not localizacao_sucesso:
+        # Garante que, se a localização falhou ou está pendente, o filtro não será aplicado,
+        # mas as coordenadas de Botafogo serão usadas para centralizar o mapa.
         user_lat, user_lon = -22.9559, -43.1789
         st.sidebar.warning("Usando coordenadas padrão de fallback (Botafogo) e sem filtro de proximidade.")
 
@@ -295,30 +304,33 @@ if data:
         # -------------------
 
         # --- FILTRO DE LOCALIZAÇÃO ---
-        # Só aplica o filtro se a caixa estiver marcada E se a localização não tiver falhado 
-        # (se o localizacao_sucesso for falso, user_lat/lon estão em Botafogo, mas o filtro será ignorado)
-        if usar_localizacao and location_source != 'Localização Automática (Browser)' and localizacao_sucesso:
-             # Lógica para Geocodificação ou Coordenadas Manuais
-             df_linha['distancia_km'] = haversine_distance(
-                 user_lat, user_lon,
-                 df_linha['latitude'], df_linha['longitude']
-             )
-             df_filtrada = df_linha[df_linha['distancia_km'] <= raio_km].copy()
-             msg_filtro = f"Mostrando **{len(df_filtrada)}** ônibus únicos num raio de **{raio_km}km**."
-        elif usar_localizacao and location_source == 'Localização Automática (Browser)' and st.session_state.geo_result['status'] == 'success':
-             # Lógica para Localização Automática (se for sucesso)
-             df_linha['distancia_km'] = haversine_distance(
-                 user_lat, user_lon,
-                 df_linha['latitude'], df_linha['longitude']
-             )
-             df_filtrada = df_linha[df_linha['distancia_km'] <= raio_km].copy()
-             msg_filtro = f"Mostrando **{len(df_filtrada)}** ônibus únicos num raio de **{raio_km}km** (via localização automática)."
+        # Só aplica o filtro se a caixa estiver marcada E se a localização foi bem-sucedida (localizacao_sucesso é True)
+        if usar_localizacao and localizacao_sucesso:
+            # Determina qual lógica de sucesso usar
+            is_auto_location_success = (location_source == 'Localização Automática (Browser)' and st.session_state.geo_result['status'] == 'success')
+            is_manual_location_success = (location_source != 'Localização Automática (Browser)')
+
+            if is_auto_location_success or is_manual_location_success:
+                 # Lógica para Geocodificação, Coordenadas Manuais ou Automática (se sucesso)
+                 df_linha['distancia_km'] = haversine_distance(
+                     user_lat, user_lon,
+                     df_linha['latitude'], df_linha['longitude']
+                 )
+                 df_filtrada = df_linha[df_linha['distancia_km'] <= raio_km].copy()
+                 
+                 source_text = "localização automática" if is_auto_location_success else "geocodificação/manual"
+                 msg_filtro = f"Mostrando **{len(df_filtrada)}** ônibus únicos num raio de **{raio_km}km** (via {source_text})."
+            else:
+                 # Esta parte lida com o caso de 'pending' na localização automática
+                 df_filtrada = df_linha.copy()
+                 msg_filtro = f"Mostrando todos os **{len(df_filtrada)}** ônibus da linha (Localização automática pendente)."
         else:
             # Mostra todos os ônibus se o filtro falhou ou não foi selecionado
             df_filtrada = df_linha.copy()
             msg_filtro = f"Mostrando todos os **{len(df_filtrada)}** ônibus da linha."
             if usar_localizacao:
                 st.warning("O filtro por proximidade não foi aplicado devido à falha ou indisponibilidade da localização.")
+
 
         # --- PLOTAGEM ---
         if not df_filtrada.empty:
@@ -331,8 +343,11 @@ if data:
             col2.metric("Último sinal recebido (BRT) às", tempo_recente)
 
             # Centro do mapa
-            # Centraliza na localização do usuário/endereço se a localização foi bem-sucedida (não é o fallback)
-            if localizacao_sucesso and usar_localizacao and (location_source != 'Localização Automática (Browser)' or st.session_state.geo_result['status'] == 'success'):
+            # Centraliza na localização do usuário/endereço se a localização foi bem-sucedida
+            location_ok = (localizacao_sucesso and usar_localizacao and 
+                           (location_source != 'Localização Automática (Browser)' or st.session_state.geo_result['status'] == 'success'))
+            
+            if location_ok:
                 center_lat, center_lon, zoom_start = user_lat, user_lon, 14
             else:
                 # Centraliza na média dos ônibus encontrados
@@ -347,7 +362,7 @@ if data:
                 hover_name="ordem",
                 hover_data={"velocidade": True, "linha": True, "datahora": True,
                              "latitude": ':.5f', "longitude": ':.5f',
-                             "distancia_km": ':.2f'} if usar_localizacao else None,
+                             "distancia_km": ':.2f'} if usar_localizacao and location_ok else None,
                 zoom=zoom_start,
                 height=600,
                 center={"lat": center_lat, "lon": center_lon},
@@ -358,7 +373,7 @@ if data:
             fig.update_traces(marker=dict(size=18, color='red'))
 
             # Adiciona o usuário no mapa (Se a localização foi obtida com sucesso)
-            if usar_localizacao and localizacao_sucesso:
+            if location_ok:
                 fig.add_scattermapbox(
                     lat=[user_lat], lon=[user_lon],
                     mode='markers',
@@ -374,7 +389,7 @@ if data:
             df_display = df_filtrada.rename(columns={'datahora': 'Data/Hora (BRT)'})
             cols_show[cols_show.index('datahora')] = 'Data/Hora (BRT)'
             
-            if usar_localizacao:
+            if usar_localizacao and localizacao_sucesso and location_ok:
                 cols_show.append('distancia_km')
                 df_display = df_display.sort_values('distancia_km')
 
